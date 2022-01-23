@@ -9,7 +9,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let addr = "[::1]:50218".parse()?;
-    let loquat = Loquat::new();
+    let loquat = LoquatServiceImpl::new();
 
     info!("Runing loquat server on {}", addr);
     let server = tonic::transport::Server::builder()
@@ -27,16 +27,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-struct Loquat {}
+struct LoquatServiceImpl {}
 
-impl Loquat {
+impl LoquatServiceImpl {
     pub fn new() -> Self {
-        Loquat {}
+        LoquatServiceImpl {}
     }
 }
 
 #[tonic::async_trait]
-impl loquat_proto::loquat_server::Loquat for Loquat {
+impl loquat_proto::loquat_server::Loquat for LoquatServiceImpl {
     async fn get_plugins(
         &self,
         _: tonic::Request<loquat_proto::GetPluginsRequest>,
