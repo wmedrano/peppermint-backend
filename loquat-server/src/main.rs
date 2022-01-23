@@ -1,8 +1,15 @@
+use log::info;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .init();
+
     let addr = "[::1]:50218".parse()?;
     let loquat = Loquat::new();
 
+    info!("Runing loquat server on {}", addr);
     tonic::transport::Server::builder()
         .add_service(loquat_proto::loquat_server::LoquatServer::new(loquat))
         .serve(addr)
@@ -25,6 +32,9 @@ impl loquat_proto::loquat_server::Loquat for Loquat {
         &self,
         _: tonic::Request<loquat_proto::GetPluginsRequest>,
     ) -> Result<tonic::Response<loquat_proto::GetPluginsResponse>, tonic::Status> {
-        Err(tonic::Status::unimplemented("Not yet implemented!"))
+        let plugins = vec![];
+        Ok(tonic::Response::new(loquat_proto::GetPluginsResponse {
+            plugins,
+        }))
     }
 }
