@@ -7,6 +7,14 @@ message Plugin {
 
     /// The name of this plugin.
     string name = 2;
+
+    enum Format {
+        UNKNOWN = 0;
+        LV2 = 1;
+    }
+
+    /// The format for the plugin.
+    Format format = 3;
 }
 
 service Loquat {
