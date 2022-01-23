@@ -1,0 +1,5 @@
+[workspace]
+members = [
+  "loquat-server",
+  "loquat-proto",
+]

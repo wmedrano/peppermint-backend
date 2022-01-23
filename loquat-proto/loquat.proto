@@ -1,0 +1,20 @@
+syntax = "proto3";
+package loquat;
+
+message Plugin {
+    /// A unique identifier for this plugin.
+    string id = 1;
+
+    /// The name of this plugin.
+    string name = 2;
+}
+
+service Loquat {
+    rpc GetPlugins(GetPluginsRequest) returns (GetPluginsResponse);
+}
+
+message GetPluginsRequest {}
+
+message GetPluginsResponse {
+    repeated Plugin plugins = 1;
+}
