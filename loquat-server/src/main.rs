@@ -1,5 +1,7 @@
 use log::info;
 
+pub mod loquat_jack;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::builder()
@@ -10,11 +12,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let loquat = Loquat::new();
 
     info!("Runing loquat server on {}", addr);
-    tonic::transport::Server::builder()
+    let server = tonic::transport::Server::builder()
         .add_service(loquat_proto::loquat_server::LoquatServer::new(loquat))
-        .serve(addr)
-        .await?;
+        .serve(addr);
 
+    let (client, status) =
+        jack::Client::new("loquat", jack::ClientOptions::NO_START_SERVER).unwrap();
+    info!("Started client {} with status {:?}.", client.name(), status);
+    let processor = loquat_jack::Processor::new(&client).unwrap();
+    let client = client.activate_async((), processor).unwrap();
+
+    server.await?;
+    client.deactivate().unwrap();
     Ok(())
 }
 
