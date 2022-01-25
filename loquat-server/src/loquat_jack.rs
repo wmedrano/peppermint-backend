@@ -1,38 +1,48 @@
 pub struct Processor {
     midi_in: jack::Port<jack::MidiIn>,
     outputs: [jack::Port<jack::AudioOut>; 2],
+    out_buffer: loquat_core::channels::FixedChannels<2>,
     inner: loquat_core::LoquatCore,
 }
 
 impl Processor {
-    pub fn new(client: &jack::Client) -> Result<Processor, jack::Error> {
+    pub fn new(
+        client: &jack::Client,
+        command_queue: ringbuf::Consumer<loquat_core::command::Command>,
+    ) -> Result<Processor, jack::Error> {
         Ok(Processor {
             midi_in: client.register_port("midi_in", jack::MidiIn::default())?,
             outputs: [
                 client.register_port("out_left", jack::AudioOut::default())?,
                 client.register_port("out_right", jack::AudioOut::default())?,
             ],
-            inner: loquat_core::LoquatCore::new(),
+            out_buffer: loquat_core::channels::FixedChannels::new(client.buffer_size() as usize),
+            inner: loquat_core::LoquatCore::new(command_queue),
         })
     }
 }
 
 impl jack::ProcessHandler for Processor {
     fn process(&mut self, _: &jack::Client, ps: &jack::ProcessScope) -> jack::Control {
-        let [out_left, out_right] = &mut self.outputs;
         let io = loquat_core::IO {
-            out_left: out_left.as_mut_slice(ps),
-            out_right: out_right.as_mut_slice(ps),
+            audio_out: &mut self.out_buffer,
             midi: self.midi_in.iter(ps).map(|m| loquat_core::RawMidi {
                 frame: m.time as usize,
                 data: m.bytes,
             }),
         };
         self.inner.process(io);
+        let srcs = self.out_buffer.iter_channels();
+        let dsts = self.outputs.iter_mut();
+        for (src, dst) in srcs.zip(dsts) {
+            dst.as_mut_slice(ps).copy_from_slice(src);
+        }
         jack::Control::Continue
     }
 
-    fn buffer_size(&mut self, _: &jack::Client, _: jack::Frames) -> jack::Control {
+    fn buffer_size(&mut self, _: &jack::Client, buffer_size: jack::Frames) -> jack::Control {
+        self.out_buffer.set_buffer_size(buffer_size as usize);
+        self.inner.set_buffer_size(buffer_size as usize);
         jack::Control::Continue
     }
 }

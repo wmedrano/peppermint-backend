@@ -1,6 +1,7 @@
-use log::info;
+use log::{info, warn};
 
 pub mod loquat_jack;
+pub mod service_impl;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -8,54 +9,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter_level(log::LevelFilter::Info)
         .init();
 
-    let addr = "[::1]:50218".parse()?;
-    let loquat = LoquatServiceImpl::new();
-
-    info!("Runing loquat server on {}", addr);
-    let server = tonic::transport::Server::builder()
-        .add_service(loquat_proto::loquat_server::LoquatServer::new(loquat))
-        .serve(addr);
+    let command_queue_size = 4096;
+    let (command_tx, command_rx) =
+        ringbuf::RingBuffer::<loquat_core::command::Command>::new(command_queue_size).split();
 
     let (client, status) =
         jack::Client::new("loquat", jack::ClientOptions::NO_START_SERVER).unwrap();
     info!("Started client {} with status {:?}.", client.name(), status);
-    let processor = loquat_jack::Processor::new(&client).unwrap();
+
+    let addr = "[::1]:50218".parse()?;
+    info!("Runing loquat server on {}", addr);
+    let loquat = service_impl::LoquatServiceImpl::new(client.buffer_size() as usize, command_tx);
+    let server = tonic::transport::Server::builder()
+        .add_service(loquat_proto::loquat_server::LoquatServer::new(loquat))
+        .serve(addr);
+
+    let processor = loquat_jack::Processor::new(&client, command_rx).unwrap();
     let client = client.activate_async((), processor).unwrap();
 
+    info!("Loquat is ready.");
     server.await?;
+    warn!("Terminating Loquat.");
     client.deactivate().unwrap();
     Ok(())
-}
-
-struct LoquatServiceImpl {
-    lv2_world: livi::World,
-}
-
-impl LoquatServiceImpl {
-    pub fn new() -> Self {
-        let mut lv2_world = livi::World::new();
-        lv2_world.initialize_block_length(1, 8192).unwrap();
-        LoquatServiceImpl { lv2_world }
-    }
-}
-
-#[tonic::async_trait]
-impl loquat_proto::loquat_server::Loquat for LoquatServiceImpl {
-    async fn get_plugins(
-        &self,
-        _: tonic::Request<loquat_proto::GetPluginsRequest>,
-    ) -> Result<tonic::Response<loquat_proto::GetPluginsResponse>, tonic::Status> {
-        let plugins = self
-            .lv2_world
-            .iter_plugins()
-            .map(|p| loquat_proto::Plugin {
-                id: format!("lv2{}", p.uri()),
-                name: p.name(),
-                format: loquat_proto::plugin::Format::Lv2.into(),
-            })
-            .collect();
-        Ok(tonic::Response::new(loquat_proto::GetPluginsResponse {
-            plugins,
-        }))
-    }
 }

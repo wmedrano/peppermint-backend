@@ -2,10 +2,10 @@ syntax = "proto3";
 package loquat;
 
 message Plugin {
-    /// A unique identifier for this plugin.
+    // A unique identifier for this plugin.
     string id = 1;
 
-    /// The name of this plugin.
+    // The name of this plugin.
     string name = 2;
 
     enum Format {
@@ -13,16 +13,101 @@ message Plugin {
         LV2 = 1;
     }
 
-    /// The format for the plugin.
+    // The format for the plugin.
     Format format = 3;
 }
 
+message Track {
+    // The unique identifier for this track.
+    uint64 id = 1;
+
+    // The name for the track.
+    string name = 2;
+
+    // The gain of the track.
+    float gain = 3;
+}
+
 service Loquat {
+    // Get the list of plugins.
     rpc GetPlugins(GetPluginsRequest) returns (GetPluginsResponse);
+
+    /// Get the list of tracks.
+    rpc GetTracks(GetTracksRequest) returns (GetTracksResponse);
+
+    /// Create a new track.
+    rpc CreateTrack(CreateTrackRequest) returns (CreateTrackResponse);
+
+    /// Delete an existing track.
+    rpc DeleteTrack(DeleteTrackRequest) returns (DeleteTrackResponse);
+
+    /// Update an existing track.
+    rpc UpdateTrack(UpdateTrackRequest) returns (UpdateTrackResponse);
 }
 
 message GetPluginsRequest {}
 
 message GetPluginsResponse {
+    /// The list of plugins.
     repeated Plugin plugins = 1;
 }
+
+message GetTracksRequest {}
+
+message GetTracksResponse {
+    repeated Track tracks = 1;
+}
+
+message CreateTrackRequest {
+    // The track_id of the track to create. If left empty, an ID will be
+    // generated.
+    //
+    // Note: If track_id is specified, but the id is not available, then an
+    // error will be returned.
+    uint64 track_id = 1;
+
+    // The name of the track to create. If empty, a name will be generated.
+    string name = 2;
+}
+
+message CreateTrackResponse {
+    // The newly created track.
+    Track track = 1;
+}
+
+message DeleteTrackRequest {
+    // The track_id of the track to delete.
+    uint64 track_id = 1;
+}
+
+message DeleteTrackResponse {
+}
+
+message TrackPropertyUpdate {
+    enum TrackProperty {
+        // No property.
+        UNDEFINED = 0;
+        
+        // The gain of the track. This controls the volume.
+        GAIN = 1;
+    }
+
+    // The property.
+    TrackProperty property = 1;
+
+    // The value of the property.
+    float value = 2;
+}
+
+message UpdateTrackRequest {
+    // The track_id to update.
+    uint64 track_id = 1;
+
+    // The new name for the track or empty if it should not be changed.
+    string name = 2;
+
+    // The properties to update.
+    repeated TrackPropertyUpdate updates = 3;
+}
+
+message UpdateTrackResponse {}
