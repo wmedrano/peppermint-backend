@@ -97,7 +97,7 @@ impl loquat_proto::loquat_server::Loquat for LoquatServiceImpl {
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
         let core_track = loquat_core::track::Track::new(track_id, self.buffer_size);
-        let track_name = if req.get_ref().name == "" {
+        let track_name = if req.get_ref().name.is_empty() {
             format!("Track{}", track_id)
         } else {
             req.get_ref().name.clone()
@@ -148,7 +148,7 @@ impl loquat_proto::loquat_server::Loquat for LoquatServiceImpl {
                 format!("track {} not found", track_id),
             )
         })?;
-        if req.get_ref().name != "" {
+        if !req.get_ref().name.is_empty() {
             track.name = req.get_ref().name.clone();
         }
         for update in req.get_ref().updates.iter() {
