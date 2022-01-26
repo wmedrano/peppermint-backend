@@ -16,8 +16,7 @@ impl<const N: usize> FixedChannels<N> {
     }
 
     pub fn set_buffer_size(&mut self, buffer_size: usize) {
-        self.audio.reserve(buffer_size * N);
-        unsafe { self.audio.set_len(buffer_size * N) };
+        self.audio.resize(buffer_size * N, 0.0);
     }
 
     pub fn iter_channels(&self) -> impl ExactSizeIterator + Iterator<Item = &[f32]> {
