@@ -7,7 +7,7 @@ version = "0.1.0"
 
 [dependencies]
 env_logger = "0.9"
-jack = "0.8"
+jack = "0.9"
 livi = "0.3"
 log = "0.4"
 loquat-core = {path = "../loquat-core"}
