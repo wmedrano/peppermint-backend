@@ -15,6 +15,23 @@ message Plugin {
 
     // The format for the plugin.
     Format format = 3;
+
+    repeated PluginParam params = 4;
+
+    reserved 5 to max; // Next IDs.
+}
+
+message PluginParam {
+    // The name of the parameter.
+    string name = 1;
+
+    // The default value of the parameter.
+    float default_value = 2;
+
+    // The index of the parameter within the plugin.
+    uint32 index = 3;
+
+    reserved 4 to max; // Next IDs.
 }
 
 message Track {
@@ -26,6 +43,16 @@ message Track {
 
     // The gain of the track.
     float gain = 3;
+
+    repeated PluginInstance plugin_instances = 4;
+}
+
+message PluginInstance {
+    // The id of the plugin.
+    string plugin_id = 1;
+
+    // The parameters for the plugin.
+    repeated float params = 2;
 }
 
 service Loquat {
@@ -43,6 +70,9 @@ service Loquat {
 
     /// Update an existing track.
     rpc UpdateTrack(UpdateTrackRequest) returns (UpdateTrackResponse);
+
+    /// Instantiate a plugin.
+    rpc InstantiatePlugin(InstantiatePluginRequest) returns (InstantiatePluginResponse);
 }
 
 message GetPluginsRequest {}
@@ -111,3 +141,19 @@ message UpdateTrackRequest {
 }
 
 message UpdateTrackResponse {}
+
+message InstantiatePluginRequest {
+    // The track_id of the track to instantiate the plugin on.
+    uint64 track_id = 1;
+
+    // The plugin_id of the plugin to instantiate.
+    string plugin_id = 2;
+}
+
+message InstantiatePluginResponse {
+    // The id of the track containing the plugin instance.
+    uint64 track_id = 1;
+
+    // The index of the plugin instance within the track.
+    uint64 plugin_instance_index = 2;
+}

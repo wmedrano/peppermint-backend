@@ -450,9 +450,9 @@ dependencies = [
 
 [[package]]
 name = "livi"
-version = "0.3.8"
+version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c970c5ae6e1ba7c16b8e9d55245a576a86e4c251b1d8fb28ffd389c4c4ce75ad"
+checksum = "28d40fbdda0f3cbee526e04e08d69b0ecba4bbb24ed5e25d2d8ed5eb89b1ab76"
 dependencies = [
  "lilv",
  "log",
@@ -484,6 +484,7 @@ version = "0.1.0"
 dependencies = [
  "livi",
  "log",
+ "lv2_raw",
  "ringbuf",
 ]
 

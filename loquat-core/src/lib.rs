@@ -6,6 +6,7 @@ pub mod track;
 
 pub type Id = u64;
 
+#[derive(Copy, Clone, Debug)]
 pub struct RawMidi<'a> {
     pub frame: usize,
     pub data: &'a [u8],
@@ -29,12 +30,17 @@ impl LoquatCore {
         }
     }
 
-    pub fn process<'a, M: Iterator<Item = RawMidi<'a>>>(&mut self, io: IO<'a, M>) {
+    pub fn process<'a, M: Clone + Iterator<Item = RawMidi<'a>>>(
+        &mut self,
+        io: IO<'a, M>,
+        samples: usize,
+    ) {
         self.handle_command_queue();
         io.audio_out.clear();
         for track in self.tracks.iter_mut() {
             let gain = track.property(track::TrackProperty::Gain);
-            io.audio_out.mix(track.process(), gain);
+            io.audio_out
+                .mix(track.process(samples, io.midi.clone()), gain);
         }
     }
 
@@ -58,6 +64,15 @@ impl LoquatCore {
                                 track.set_property(property, value);
                                 break;
                             }
+                        }
+                    }
+                    Command::PushPluginInstance {
+                        track,
+                        instance,
+                        params,
+                    } => {
+                        if let Some(track) = self.tracks.iter_mut().find(|t| t.id() == track) {
+                            track.push_instance(instance, params);
                         }
                     }
                 };
