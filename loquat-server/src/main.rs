@@ -26,7 +26,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ringbuf::RingBuffer::<loquat_core::command::Command>::new(command_queue_size).split();
 
     let addr = format!("127.0.0.1:{}", options.port).parse()?;
-    info!("Runing loquat server on {}", addr);
     let (sample_rate, buffer_size) = sample_rate_and_buffer_size(&options);
     let loquat_service = service_impl::LoquatServiceImpl::new(sample_rate, buffer_size, command_tx);
     let server = tonic::transport::Server::builder()
@@ -44,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    info!("Loquat is ready.");
+    info!("Loquat is ready at {}.", addr);
     server.await?;
     warn!("Terminating Loquat.");
     Ok(())
@@ -90,7 +89,8 @@ fn run_dummy(loquat: loquat_core::LoquatCore, buffer_size: usize) {
     let mut loquat = loquat;
     let mut out = loquat_core::channels::FixedChannels::<2>::new(buffer_size);
     loop {
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        // Add a delay to decrease the CPU usage.
+        std::thread::sleep(std::time::Duration::from_millis(20));
         let io = loquat_core::IO {
             audio_out: &mut out,
             midi: std::iter::empty(),
