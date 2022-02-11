@@ -1,8 +1,8 @@
 use log::{info, warn};
 use structopt::StructOpt;
 
-pub mod loquat_jack;
-pub mod service_impl;
+pub mod backends;
+pub mod grpc_service;
 
 #[derive(Debug, StructOpt)]
 struct Options {
@@ -11,6 +11,9 @@ struct Options {
 
     #[structopt(long, default_value = "jack")]
     backend: Backend,
+
+    #[structopt(long, default_value = "4096")]
+    command_queue_size: usize,
 }
 
 #[tokio::main]
@@ -21,13 +24,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter_level(log::LevelFilter::Info)
         .init();
 
-    let command_queue_size = 4096;
     let (command_tx, command_rx) =
-        ringbuf::RingBuffer::<loquat_core::command::Command>::new(command_queue_size).split();
+        ringbuf::RingBuffer::<loquat_core::command::Command>::new(options.command_queue_size)
+            .split();
 
     let addr = format!("127.0.0.1:{}", options.port).parse()?;
-    let (sample_rate, buffer_size) = sample_rate_and_buffer_size(&options);
-    let loquat_service = service_impl::LoquatServiceImpl::new(sample_rate, buffer_size, command_tx);
+    let (sample_rate, buffer_size) = match options.backend {
+        Backend::Dummy => backends::dummy::sample_rate_and_buffer_size(),
+        Backend::Jack => backends::jack::sample_rate_and_buffer_size().unwrap(),
+    };
+    let loquat_service = grpc_service::LoquatServiceImpl::new(sample_rate, buffer_size, command_tx);
     let server = tonic::transport::Server::builder()
         .add_service(loquat_proto::loquat_server::LoquatServer::new(
             loquat_service,
@@ -38,8 +44,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _audio_thread = std::thread::spawn(move || {
         let core = loquat_core::LoquatCore::new(command_rx);
         match options.backend {
-            Backend::Dummy => run_dummy(core, buffer_size),
-            Backend::Jack => run_jack(core),
+            Backend::Dummy => backends::dummy::run(core, buffer_size),
+            Backend::Jack => backends::jack::run(core).unwrap(),
         }
     });
 
@@ -47,56 +53,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     server.await?;
     warn!("Terminating Loquat.");
     Ok(())
-}
-
-fn sample_rate_and_buffer_size(options: &Options) -> (f64, usize) {
-    match options.backend {
-        Backend::Dummy => (44100.0, 1024),
-        Backend::Jack => {
-            let (client, _) =
-                jack::Client::new("loquat_probe", jack::ClientOptions::NO_START_SERVER).unwrap();
-            (client.sample_rate() as f64, client.buffer_size() as usize)
-        }
-    }
-}
-
-fn run_jack(loquat: loquat_core::LoquatCore) {
-    let (client, status) =
-        jack::Client::new("loquat", jack::ClientOptions::NO_START_SERVER).unwrap();
-    info!("Started client {} with status {:?}.", client.name(), status);
-    let processor = loquat_jack::Processor::new(&client, loquat).unwrap();
-    let client = client.activate_async((), processor).unwrap();
-    client
-        .as_client()
-        .connect_ports_by_name("loquat:out_left", "system:playback_1")
-        .ok();
-    client
-        .as_client()
-        .connect_ports_by_name("loquat:out_right", "system:playback_2")
-        .ok();
-    client
-        .as_client()
-        .connect_ports_by_name(
-            "a2j:Arturia MicroLab [32] (capture): Arturia MicroLab ",
-            "loquat:midi_in",
-        )
-        .ok();
-    std::thread::park();
-    client.deactivate().unwrap();
-}
-
-fn run_dummy(loquat: loquat_core::LoquatCore, buffer_size: usize) {
-    let mut loquat = loquat;
-    let mut out = loquat_core::channels::FixedChannels::<2>::new(buffer_size);
-    loop {
-        // Add a delay to decrease the CPU usage.
-        std::thread::sleep(std::time::Duration::from_millis(20));
-        let io = loquat_core::IO {
-            audio_out: &mut out,
-            midi: std::iter::empty(),
-        };
-        loquat.process(io, buffer_size);
-    }
 }
 
 #[derive(Debug)]
