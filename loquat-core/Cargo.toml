@@ -8,4 +8,5 @@ version = "0.1.0"
 [dependencies]
 livi = "0.3"
 log = "0.4"
+lv2_raw = "0.2"
 ringbuf = "0.2"

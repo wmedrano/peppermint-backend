@@ -9,11 +9,12 @@ pub struct LoquatServiceImpl {
     commands: Mutex<Producer<Command>>,
     next_track_id: std::sync::atomic::AtomicU64,
     tracks: Mutex<HashMap<loquat_core::Id, loquat_proto::Track>>,
+    sample_rate: f64,
     buffer_size: usize,
 }
 
 impl LoquatServiceImpl {
-    pub fn new(buffer_size: usize, commands: Producer<Command>) -> Self {
+    pub fn new(sample_rate: f64, buffer_size: usize, commands: Producer<Command>) -> Self {
         let mut lv2_world = livi::World::new();
         lv2_world.initialize_block_length(1, 8192).unwrap();
         LoquatServiceImpl {
@@ -21,6 +22,7 @@ impl LoquatServiceImpl {
             commands: Mutex::new(commands),
             next_track_id: std::sync::atomic::AtomicU64::new(1),
             tracks: Mutex::new(HashMap::new()),
+            sample_rate,
             buffer_size,
         }
     }
@@ -31,6 +33,12 @@ impl LoquatServiceImpl {
             .map_err(|e| tonic::Status::new(tonic::Code::Internal, e.to_string()))?
             .push(command)
             .map_err(|_| tonic::Status::new(tonic::Code::Internal, "failed to send command"))
+    }
+
+    pub fn plugin_by_id(&self, id: &str) -> Option<livi::Plugin> {
+        self.lv2_world
+            .iter_plugins()
+            .find(|p| lv2_plugin_id(p) == id)
     }
 }
 
@@ -43,10 +51,19 @@ impl loquat_proto::loquat_server::Loquat for LoquatServiceImpl {
         let plugins = self
             .lv2_world
             .iter_plugins()
-            .map(|p| loquat_proto::Plugin {
-                id: format!("lv2{}", p.uri()),
-                name: p.name(),
+            .map(|plugin| loquat_proto::Plugin {
+                id: lv2_plugin_id(&plugin),
+                name: plugin.name(),
                 format: loquat_proto::plugin::Format::Lv2.into(),
+                params: plugin
+                    .ports_with_type(livi::PortType::ControlInput)
+                    .enumerate()
+                    .map(|(index, port)| loquat_proto::PluginParam {
+                        name: port.name.clone(),
+                        default_value: port.default_value,
+                        index: index as u32,
+                    })
+                    .collect(),
             })
             .collect();
         Ok(tonic::Response::new(loquat_proto::GetPluginsResponse {
@@ -96,7 +113,8 @@ impl loquat_proto::loquat_server::Loquat for LoquatServiceImpl {
                 .next_track_id
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
-        let core_track = loquat_core::track::Track::new(track_id, self.buffer_size);
+        let core_track =
+            loquat_core::track::Track::new(track_id, self.buffer_size, &self.lv2_world);
         let track_name = if req.get_ref().name.is_empty() {
             format!("Track{}", track_id)
         } else {
@@ -106,6 +124,7 @@ impl loquat_proto::loquat_server::Loquat for LoquatServiceImpl {
             id: track_id,
             name: track_name,
             gain: core_track.property(loquat_core::track::TrackProperty::Gain),
+            plugin_instances: Vec::new(),
         };
         self.send_command(Command::CreateTrack(core_track))?;
         tracks.insert(track_id, proto_track.clone());
@@ -170,4 +189,61 @@ impl loquat_proto::loquat_server::Loquat for LoquatServiceImpl {
         }
         Ok(tonic::Response::new(loquat_proto::UpdateTrackResponse {}))
     }
+
+    async fn instantiate_plugin(
+        &self,
+        req: tonic::Request<loquat_proto::InstantiatePluginRequest>,
+    ) -> Result<tonic::Response<loquat_proto::InstantiatePluginResponse>, tonic::Status> {
+        let plugin = self.plugin_by_id(&req.get_ref().plugin_id).ok_or_else(|| {
+            tonic::Status::new(
+                tonic::Code::NotFound,
+                format!("plugin {} not found", req.get_ref().plugin_id),
+            )
+        })?;
+        let instance = unsafe {
+            plugin.instantiate(self.sample_rate as f64).map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Internal,
+                    format!("failed to instantiate plugin: {:?}", e),
+                )
+            })?
+        };
+        let mut tracks = self.tracks.lock().map_err(|e| {
+            tonic::Status::new(
+                tonic::Code::Internal,
+                format!("failed to acquire lock: {:?}", e),
+            )
+        })?;
+        let track = tracks.get_mut(&req.get_ref().track_id).ok_or_else(|| {
+            tonic::Status::new(
+                tonic::Code::NotFound,
+                format!("track {} not found", req.get_ref().track_id),
+            )
+        })?;
+        let track_core_id = track.id;
+        let params: Vec<f32> = plugin
+            .ports_with_type(livi::PortType::ControlInput)
+            .map(|port| port.default_value)
+            .collect();
+        let plugin_instance_index = track.plugin_instances.len() as u64;
+        track.plugin_instances.push(loquat_proto::PluginInstance {
+            plugin_id: req.get_ref().plugin_id.clone(),
+            params: params.clone(),
+        });
+        self.send_command(Command::PushPluginInstance {
+            track: track_core_id,
+            instance,
+            params,
+        })?;
+        Ok(tonic::Response::new(
+            loquat_proto::InstantiatePluginResponse {
+                track_id: track_core_id,
+                plugin_instance_index,
+            },
+        ))
+    }
+}
+
+fn lv2_plugin_id(p: &livi::Plugin) -> String {
+    format!("lv2{}", p.uri())
 }

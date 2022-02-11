@@ -19,13 +19,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let addr = "[::1]:50218".parse()?;
     info!("Runing loquat server on {}", addr);
-    let loquat = service_impl::LoquatServiceImpl::new(client.buffer_size() as usize, command_tx);
+    let loquat = service_impl::LoquatServiceImpl::new(
+        client.sample_rate() as f64,
+        client.buffer_size() as usize,
+        command_tx,
+    );
     let server = tonic::transport::Server::builder()
         .add_service(loquat_proto::loquat_server::LoquatServer::new(loquat))
         .serve(addr);
 
     let processor = loquat_jack::Processor::new(&client, command_rx).unwrap();
     let client = client.activate_async((), processor).unwrap();
+    client
+        .as_client()
+        .connect_ports_by_name("loquat:out_left", "system:playback_1")
+        .ok();
+    client
+        .as_client()
+        .connect_ports_by_name("loquat:out_right", "system:playback_2")
+        .ok();
+    client
+        .as_client()
+        .connect_ports_by_name(
+            "a2j:Arturia MicroLab [32] (capture): Arturia MicroLab ",
+            "loquat:midi_in",
+        )
+        .ok();
 
     info!("Loquat is ready.");
     server.await?;

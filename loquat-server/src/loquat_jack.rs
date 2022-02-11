@@ -31,7 +31,7 @@ impl jack::ProcessHandler for Processor {
                 data: m.bytes,
             }),
         };
-        self.inner.process(io);
+        self.inner.process(io, ps.n_frames() as usize);
         let srcs = self.out_buffer.iter_channels();
         let dsts = self.outputs.iter_mut();
         for (src, dst) in srcs.zip(dsts) {
