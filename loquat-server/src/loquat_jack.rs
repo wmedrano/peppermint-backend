@@ -8,7 +8,7 @@ pub struct Processor {
 impl Processor {
     pub fn new(
         client: &jack::Client,
-        command_queue: ringbuf::Consumer<loquat_core::command::Command>,
+        loquat: loquat_core::LoquatCore,
     ) -> Result<Processor, jack::Error> {
         Ok(Processor {
             midi_in: client.register_port("midi_in", jack::MidiIn::default())?,
@@ -17,7 +17,7 @@ impl Processor {
                 client.register_port("out_right", jack::AudioOut::default())?,
             ],
             out_buffer: loquat_core::channels::FixedChannels::new(client.buffer_size() as usize),
-            inner: loquat_core::LoquatCore::new(command_queue),
+            inner: loquat,
         })
     }
 }
