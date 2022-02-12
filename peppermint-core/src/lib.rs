@@ -17,14 +17,14 @@ pub struct IO<'a, M> {
     pub midi: M,
 }
 
-pub struct peppermintCore {
+pub struct PeppermintCore {
     command_queue: ringbuf::Consumer<Command>,
     tracks: Vec<track::Track>,
 }
 
-impl peppermintCore {
-    pub fn new(command_queue: ringbuf::Consumer<Command>) -> peppermintCore {
-        peppermintCore {
+impl PeppermintCore {
+    pub fn new(command_queue: ringbuf::Consumer<Command>) -> PeppermintCore {
+        PeppermintCore {
             command_queue,
             tracks: Vec::with_capacity(128),
         }

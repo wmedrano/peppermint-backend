@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use peppermint_core::command::Command;
 use ringbuf::Producer;
 
-pub struct peppermintServiceImpl {
+pub struct PeppermintServiceImpl {
     lv2_world: livi::World,
     commands: Mutex<Producer<Command>>,
     next_track_id: std::sync::atomic::AtomicU64,
@@ -13,11 +13,11 @@ pub struct peppermintServiceImpl {
     buffer_size: usize,
 }
 
-impl peppermintServiceImpl {
+impl PeppermintServiceImpl {
     pub fn new(sample_rate: f64, buffer_size: usize, commands: Producer<Command>) -> Self {
         let mut lv2_world = livi::World::new();
         lv2_world.initialize_block_length(1, 8192).unwrap();
-        peppermintServiceImpl {
+        PeppermintServiceImpl {
             lv2_world,
             commands: Mutex::new(commands),
             next_track_id: std::sync::atomic::AtomicU64::new(1),
@@ -43,7 +43,7 @@ impl peppermintServiceImpl {
 }
 
 #[tonic::async_trait]
-impl peppermint_proto::peppermint_server::peppermint for peppermintServiceImpl {
+impl peppermint_proto::peppermint_server::Peppermint for PeppermintServiceImpl {
     async fn get_plugins(
         &self,
         _: tonic::Request<peppermint_proto::GetPluginsRequest>,
@@ -128,9 +128,11 @@ impl peppermint_proto::peppermint_server::peppermint for peppermintServiceImpl {
         };
         self.send_command(Command::CreateTrack(core_track))?;
         tracks.insert(track_id, proto_track.clone());
-        Ok(tonic::Response::new(peppermint_proto::CreateTrackResponse {
-            track: Some(proto_track),
-        }))
+        Ok(tonic::Response::new(
+            peppermint_proto::CreateTrackResponse {
+                track: Some(proto_track),
+            },
+        ))
     }
 
     async fn delete_track(
@@ -149,7 +151,9 @@ impl peppermint_proto::peppermint_server::peppermint for peppermintServiceImpl {
             )
         })?;
         self.send_command(Command::DeleteTrack(track_id))?;
-        Ok(tonic::Response::new(peppermint_proto::DeleteTrackResponse {}))
+        Ok(tonic::Response::new(
+            peppermint_proto::DeleteTrackResponse {},
+        ))
     }
 
     async fn update_track(
@@ -187,7 +191,9 @@ impl peppermint_proto::peppermint_server::peppermint for peppermintServiceImpl {
                 }
             }
         }
-        Ok(tonic::Response::new(peppermint_proto::UpdateTrackResponse {}))
+        Ok(tonic::Response::new(
+            peppermint_proto::UpdateTrackResponse {},
+        ))
     }
 
     async fn instantiate_plugin(
@@ -226,10 +232,12 @@ impl peppermint_proto::peppermint_server::peppermint for peppermintServiceImpl {
             .map(|port| port.default_value)
             .collect();
         let plugin_instance_index = track.plugin_instances.len() as u64;
-        track.plugin_instances.push(peppermint_proto::PluginInstance {
-            plugin_id: req.get_ref().plugin_id.clone(),
-            params: params.clone(),
-        });
+        track
+            .plugin_instances
+            .push(peppermint_proto::PluginInstance {
+                plugin_id: req.get_ref().plugin_id.clone(),
+                params: params.clone(),
+            });
         self.send_command(Command::PushPluginInstance {
             track: track_core_id,
             instance,

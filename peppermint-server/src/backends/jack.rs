@@ -5,7 +5,7 @@ pub fn sample_rate_and_buffer_size() -> Result<(f64, usize), jack::Error> {
     Ok((client.sample_rate() as f64, client.buffer_size() as usize))
 }
 
-pub fn run(peppermint: peppermint_core::peppermintCore) -> Result<(), jack::Error> {
+pub fn run(peppermint: peppermint_core::PeppermintCore) -> Result<(), jack::Error> {
     let (client, status) = jack::Client::new("peppermint", jack::ClientOptions::NO_START_SERVER)?;
     info!("Started client {} with status {:?}.", client.name(), status);
     let processor = Processor {
@@ -42,7 +42,7 @@ struct Processor {
     midi_in: jack::Port<jack::MidiIn>,
     outputs: [jack::Port<jack::AudioOut>; 2],
     out_buffer: peppermint_core::channels::FixedChannels<2>,
-    inner: peppermint_core::peppermintCore,
+    inner: peppermint_core::PeppermintCore,
 }
 
 impl jack::ProcessHandler for Processor {

@@ -33,16 +33,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Backend::Dummy => backends::dummy::sample_rate_and_buffer_size(),
         Backend::Jack => backends::jack::sample_rate_and_buffer_size().unwrap(),
     };
-    let peppermint_service = grpc_service::peppermintServiceImpl::new(sample_rate, buffer_size, command_tx);
+    let peppermint_service =
+        grpc_service::PeppermintServiceImpl::new(sample_rate, buffer_size, command_tx);
     let server = tonic::transport::Server::builder()
-        .add_service(peppermint_proto::peppermint_server::peppermintServer::new(
+        .add_service(peppermint_proto::peppermint_server::PeppermintServer::new(
             peppermint_service,
         ))
         .serve(addr);
 
     info!("Running audio loop for backend {:?}.", options.backend);
     let _audio_thread = std::thread::spawn(move || {
-        let core = peppermint_core::peppermintCore::new(command_rx);
+        let core = peppermint_core::PeppermintCore::new(command_rx);
         match options.backend {
             Backend::Dummy => backends::dummy::run(core, buffer_size),
             Backend::Jack => backends::jack::run(core).unwrap(),

@@ -2,7 +2,7 @@ pub fn sample_rate_and_buffer_size() -> (f64, usize) {
     (44100.0, 1024)
 }
 
-pub fn run(peppermint: peppermint_core::peppermintCore, buffer_size: usize) {
+pub fn run(peppermint: peppermint_core::PeppermintCore, buffer_size: usize) {
     let mut peppermint = peppermint;
     let mut out = peppermint_core::channels::FixedChannels::<2>::new(buffer_size);
     loop {
