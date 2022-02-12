@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "loquat-server"
+name = "peppermint-server"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,8 +10,8 @@ env_logger = "0.9"
 jack = "0.9"
 livi = "0.3"
 log = "0.4"
-loquat-core = {path = "../loquat-core"}
-loquat-proto = {path = "../loquat-proto"}
+peppermint-core = {path = "../peppermint-core"}
+peppermint-proto = {path = "../peppermint-proto"}
 ringbuf = "0.2"
 structopt = "0.3"
 tokio = {version = "1.0", features = ["macros", "rt-multi-thread"]}

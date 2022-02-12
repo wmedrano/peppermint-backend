@@ -17,14 +17,14 @@ pub struct IO<'a, M> {
     pub midi: M,
 }
 
-pub struct LoquatCore {
+pub struct PeppermintCore {
     command_queue: ringbuf::Consumer<Command>,
     tracks: Vec<track::Track>,
 }
 
-impl LoquatCore {
-    pub fn new(command_queue: ringbuf::Consumer<Command>) -> LoquatCore {
-        LoquatCore {
+impl PeppermintCore {
+    pub fn new(command_queue: ringbuf::Consumer<Command>) -> PeppermintCore {
+        PeppermintCore {
             command_queue,
             tracks: Vec::with_capacity(128),
         }
