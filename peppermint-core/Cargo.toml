@@ -1,13 +1,12 @@
 [package]
 edition = "2021"
-name = "loquat-proto"
+name = "peppermint-core"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-prost = "0.9"
-tonic = "0.6"
-
-[build-dependencies]
-tonic-build = "0.6"
+livi = "0.3"
+log = "0.4"
+lv2_raw = "0.2"
+ringbuf = "0.2"

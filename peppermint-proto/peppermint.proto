@@ -1,5 +1,5 @@
 syntax = "proto3";
-package loquat;
+package peppermint;
 
 message Plugin {
     // A unique identifier for this plugin.
@@ -55,7 +55,7 @@ message PluginInstance {
     repeated float params = 2;
 }
 
-service Loquat {
+service peppermint {
     // Get the list of plugins.
     rpc GetPlugins(GetPluginsRequest) returns (GetPluginsResponse);
 

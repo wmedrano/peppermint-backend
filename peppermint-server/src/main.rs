@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let (command_tx, command_rx) =
-        ringbuf::RingBuffer::<loquat_core::command::Command>::new(options.command_queue_size)
+        ringbuf::RingBuffer::<peppermint_core::command::Command>::new(options.command_queue_size)
             .split();
 
     let addr = format!("127.0.0.1:{}", options.port).parse()?;
@@ -33,25 +33,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Backend::Dummy => backends::dummy::sample_rate_and_buffer_size(),
         Backend::Jack => backends::jack::sample_rate_and_buffer_size().unwrap(),
     };
-    let loquat_service = grpc_service::LoquatServiceImpl::new(sample_rate, buffer_size, command_tx);
+    let peppermint_service = grpc_service::peppermintServiceImpl::new(sample_rate, buffer_size, command_tx);
     let server = tonic::transport::Server::builder()
-        .add_service(loquat_proto::loquat_server::LoquatServer::new(
-            loquat_service,
+        .add_service(peppermint_proto::peppermint_server::peppermintServer::new(
+            peppermint_service,
         ))
         .serve(addr);
 
     info!("Running audio loop for backend {:?}.", options.backend);
     let _audio_thread = std::thread::spawn(move || {
-        let core = loquat_core::LoquatCore::new(command_rx);
+        let core = peppermint_core::peppermintCore::new(command_rx);
         match options.backend {
             Backend::Dummy => backends::dummy::run(core, buffer_size),
             Backend::Jack => backends::jack::run(core).unwrap(),
         }
     });
 
-    info!("Loquat is ready at {}.", addr);
+    info!("peppermint is ready at {}.", addr);
     server.await?;
-    warn!("Terminating Loquat.");
+    warn!("Terminating peppermint.");
     Ok(())
 }
 

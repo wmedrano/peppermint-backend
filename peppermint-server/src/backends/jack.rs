@@ -1,12 +1,12 @@
 use log::info;
 
 pub fn sample_rate_and_buffer_size() -> Result<(f64, usize), jack::Error> {
-    let (client, _) = jack::Client::new("loquat_probe", jack::ClientOptions::NO_START_SERVER)?;
+    let (client, _) = jack::Client::new("peppermint_probe", jack::ClientOptions::NO_START_SERVER)?;
     Ok((client.sample_rate() as f64, client.buffer_size() as usize))
 }
 
-pub fn run(loquat: loquat_core::LoquatCore) -> Result<(), jack::Error> {
-    let (client, status) = jack::Client::new("loquat", jack::ClientOptions::NO_START_SERVER)?;
+pub fn run(peppermint: peppermint_core::peppermintCore) -> Result<(), jack::Error> {
+    let (client, status) = jack::Client::new("peppermint", jack::ClientOptions::NO_START_SERVER)?;
     info!("Started client {} with status {:?}.", client.name(), status);
     let processor = Processor {
         midi_in: client.register_port("midi_in", jack::MidiIn::default())?,
@@ -14,23 +14,23 @@ pub fn run(loquat: loquat_core::LoquatCore) -> Result<(), jack::Error> {
             client.register_port("out_left", jack::AudioOut::default())?,
             client.register_port("out_right", jack::AudioOut::default())?,
         ],
-        out_buffer: loquat_core::channels::FixedChannels::new(client.buffer_size() as usize),
-        inner: loquat,
+        out_buffer: peppermint_core::channels::FixedChannels::new(client.buffer_size() as usize),
+        inner: peppermint,
     };
     let client = client.activate_async((), processor)?;
     client
         .as_client()
-        .connect_ports_by_name("loquat:out_left", "system:playback_1")
+        .connect_ports_by_name("peppermint:out_left", "system:playback_1")
         .ok();
     client
         .as_client()
-        .connect_ports_by_name("loquat:out_right", "system:playback_2")
+        .connect_ports_by_name("peppermint:out_right", "system:playback_2")
         .ok();
     client
         .as_client()
         .connect_ports_by_name(
             "a2j:Arturia MicroLab [32] (capture): Arturia MicroLab ",
-            "loquat:midi_in",
+            "peppermint:midi_in",
         )
         .ok();
     std::thread::park();
@@ -41,15 +41,15 @@ pub fn run(loquat: loquat_core::LoquatCore) -> Result<(), jack::Error> {
 struct Processor {
     midi_in: jack::Port<jack::MidiIn>,
     outputs: [jack::Port<jack::AudioOut>; 2],
-    out_buffer: loquat_core::channels::FixedChannels<2>,
-    inner: loquat_core::LoquatCore,
+    out_buffer: peppermint_core::channels::FixedChannels<2>,
+    inner: peppermint_core::peppermintCore,
 }
 
 impl jack::ProcessHandler for Processor {
     fn process(&mut self, _: &jack::Client, ps: &jack::ProcessScope) -> jack::Control {
-        let io = loquat_core::IO {
+        let io = peppermint_core::IO {
             audio_out: &mut self.out_buffer,
-            midi: self.midi_in.iter(ps).map(|m| loquat_core::RawMidi {
+            midi: self.midi_in.iter(ps).map(|m| peppermint_core::RawMidi {
                 frame: m.time as usize,
                 data: m.bytes,
             }),

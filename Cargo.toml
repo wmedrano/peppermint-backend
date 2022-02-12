@@ -1,6 +1,6 @@
 [workspace]
 members = [
-  "loquat-server",
-  "loquat-proto",
-  "loquat-core",
+  "peppermint-server",
+  "peppermint-proto",
+  "peppermint-core",
 ]
