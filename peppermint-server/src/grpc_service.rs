@@ -5,40 +5,26 @@ use peppermint_core::command::Command;
 use ringbuf::Producer;
 
 pub struct PeppermintServiceImpl {
-    lv2_world: livi::World,
-    commands: Mutex<Producer<Command>>,
-    next_track_id: std::sync::atomic::AtomicU64,
-    tracks: Mutex<HashMap<peppermint_core::Id, peppermint_proto::Track>>,
-    sample_rate: f64,
-    buffer_size: usize,
+    inner: Mutex<PeppermintServiceImplInner>,
 }
 
 impl PeppermintServiceImpl {
     pub fn new(sample_rate: f64, buffer_size: usize, commands: Producer<Command>) -> Self {
-        let mut lv2_world = livi::World::new();
-        lv2_world.initialize_block_length(1, 8192).unwrap();
         PeppermintServiceImpl {
-            lv2_world,
-            commands: Mutex::new(commands),
-            next_track_id: std::sync::atomic::AtomicU64::new(1),
-            tracks: Mutex::new(HashMap::new()),
-            sample_rate,
-            buffer_size,
+            inner: Mutex::new(PeppermintServiceImplInner::new(
+                sample_rate,
+                buffer_size,
+                commands,
+            )),
         }
     }
 
-    pub fn send_command(&self, command: Command) -> Result<(), tonic::Status> {
-        self.commands
-            .try_lock()
-            .map_err(|e| tonic::Status::new(tonic::Code::Internal, e.to_string()))?
-            .push(command)
-            .map_err(|_| tonic::Status::new(tonic::Code::Internal, "failed to send command"))
-    }
-
-    pub fn plugin_by_id(&self, id: &str) -> Option<livi::Plugin> {
-        self.lv2_world
-            .iter_plugins()
-            .find(|p| lv2_plugin_id(p) == id)
+    fn lock_inner(
+        &self,
+    ) -> Result<std::sync::MutexGuard<PeppermintServiceImplInner>, tonic::Status> {
+        self.inner
+            .lock()
+            .map_err(|e| tonic::Status::new(tonic::Code::Internal, e.to_string()))
     }
 }
 
@@ -47,6 +33,77 @@ impl peppermint_proto::peppermint_server::Peppermint for PeppermintServiceImpl {
     async fn get_plugins(
         &self,
         _: tonic::Request<peppermint_proto::GetPluginsRequest>,
+    ) -> Result<tonic::Response<peppermint_proto::GetPluginsResponse>, tonic::Status> {
+        self.lock_inner()?.get_plugins()
+    }
+
+    async fn get_tracks(
+        &self,
+        _: tonic::Request<peppermint_proto::GetTracksRequest>,
+    ) -> Result<tonic::Response<peppermint_proto::GetTracksResponse>, tonic::Status> {
+        self.lock_inner()?.get_tracks()
+    }
+
+    async fn create_track(
+        &self,
+        req: tonic::Request<peppermint_proto::CreateTrackRequest>,
+    ) -> Result<tonic::Response<peppermint_proto::CreateTrackResponse>, tonic::Status> {
+        self.lock_inner()?.create_track(req)
+    }
+
+    async fn delete_track(
+        &self,
+        req: tonic::Request<peppermint_proto::DeleteTrackRequest>,
+    ) -> Result<tonic::Response<peppermint_proto::DeleteTrackResponse>, tonic::Status> {
+        self.lock_inner()?.delete_track(req)
+    }
+
+    async fn update_track(
+        &self,
+        req: tonic::Request<peppermint_proto::UpdateTrackRequest>,
+    ) -> Result<tonic::Response<peppermint_proto::UpdateTrackResponse>, tonic::Status> {
+        self.lock_inner()?.update_track(req)
+    }
+
+    async fn instantiate_plugin(
+        &self,
+        req: tonic::Request<peppermint_proto::InstantiatePluginRequest>,
+    ) -> Result<tonic::Response<peppermint_proto::InstantiatePluginResponse>, tonic::Status> {
+        self.lock_inner()?.instantiate_plugin(req)
+    }
+}
+
+pub struct PeppermintServiceImplInner {
+    lv2_world: livi::World,
+    commands: Producer<Command>,
+    next_track_id: peppermint_core::Id,
+    tracks: HashMap<peppermint_core::Id, peppermint_proto::Track>,
+    sample_rate: f64,
+    buffer_size: usize,
+}
+
+impl PeppermintServiceImplInner {
+    fn new(sample_rate: f64, buffer_size: usize, commands: Producer<Command>) -> Self {
+        let mut lv2_world = livi::World::new();
+        lv2_world.initialize_block_length(1, 8192).unwrap();
+        PeppermintServiceImplInner {
+            lv2_world,
+            commands,
+            next_track_id: 1,
+            tracks: HashMap::new(),
+            sample_rate,
+            buffer_size,
+        }
+    }
+
+    fn plugin_by_id(&self, id: &str) -> Option<livi::Plugin> {
+        self.lv2_world
+            .iter_plugins()
+            .find(|p| lv2_plugin_id(p) == id)
+    }
+
+    fn get_plugins(
+        &self,
     ) -> Result<tonic::Response<peppermint_proto::GetPluginsResponse>, tonic::Status> {
         let plugins = self
             .lv2_world
@@ -71,47 +128,30 @@ impl peppermint_proto::peppermint_server::Peppermint for PeppermintServiceImpl {
         }))
     }
 
-    async fn get_tracks(
+    fn get_tracks(
         &self,
-        _: tonic::Request<peppermint_proto::GetTracksRequest>,
     ) -> Result<tonic::Response<peppermint_proto::GetTracksResponse>, tonic::Status> {
-        let mut tracks: Vec<_> = self
-            .tracks
-            .lock()
-            .map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Internal,
-                    format!("Failed to acquire lock: {}", e),
-                )
-            })?
-            .values()
-            .cloned()
-            .collect();
+        let mut tracks: Vec<_> = self.tracks.values().cloned().collect();
         tracks.sort_by_key(|t| t.id);
         Ok(tonic::Response::new(peppermint_proto::GetTracksResponse {
             tracks,
         }))
     }
 
-    async fn create_track(
-        &self,
+    fn create_track(
+        &mut self,
         req: tonic::Request<peppermint_proto::CreateTrackRequest>,
     ) -> Result<tonic::Response<peppermint_proto::CreateTrackResponse>, tonic::Status> {
-        let mut tracks = self
-            .tracks
-            .lock()
-            .map_err(|e| tonic::Status::new(tonic::Code::Internal, e.to_string()))?;
         let mut track_id = req.get_ref().track_id;
-        if track_id != 0 && tracks.contains_key(&track_id) {
+        if track_id != 0 && self.tracks.contains_key(&track_id) {
             return Err(tonic::Status::new(
                 tonic::Code::AlreadyExists,
                 format!("track {} already exists", track_id),
             ));
         }
-        while track_id == 0 || tracks.contains_key(&track_id) {
-            track_id = self
-                .next_track_id
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        while track_id == 0 || self.tracks.contains_key(&track_id) {
+            track_id = self.next_track_id;
+            self.next_track_id += 1;
         }
         let core_track =
             peppermint_core::track::Track::new(track_id, self.buffer_size, &self.lv2_world);
@@ -126,8 +166,10 @@ impl peppermint_proto::peppermint_server::Peppermint for PeppermintServiceImpl {
             gain: core_track.property(peppermint_core::track::TrackProperty::Gain),
             plugin_instances: Vec::new(),
         };
-        self.send_command(Command::CreateTrack(core_track))?;
-        tracks.insert(track_id, proto_track.clone());
+        self.commands
+            .push(Command::CreateTrack(core_track))
+            .map_err(|_| tonic::Status::new(tonic::Code::Internal, "failed to send command"))?;
+        self.tracks.insert(track_id, proto_track.clone());
         Ok(tonic::Response::new(
             peppermint_proto::CreateTrackResponse {
                 track: Some(proto_track),
@@ -135,37 +177,31 @@ impl peppermint_proto::peppermint_server::Peppermint for PeppermintServiceImpl {
         ))
     }
 
-    async fn delete_track(
-        &self,
+    fn delete_track(
+        &mut self,
         req: tonic::Request<peppermint_proto::DeleteTrackRequest>,
     ) -> Result<tonic::Response<peppermint_proto::DeleteTrackResponse>, tonic::Status> {
         let track_id = req.get_ref().track_id;
-        let mut tracks = self
-            .tracks
-            .lock()
-            .map_err(|e| tonic::Status::new(tonic::Code::Internal, e.to_string()))?;
-        let _ = tracks.remove(&track_id).ok_or_else(|| {
+        let _ = self.tracks.remove(&track_id).ok_or_else(|| {
             tonic::Status::new(
                 tonic::Code::NotFound,
                 format!("track {} not found", track_id),
             )
         })?;
-        self.send_command(Command::DeleteTrack(track_id))?;
+        self.commands
+            .push(Command::DeleteTrack(track_id))
+            .map_err(|_| tonic::Status::new(tonic::Code::Internal, "failed to send command"))?;
         Ok(tonic::Response::new(
             peppermint_proto::DeleteTrackResponse {},
         ))
     }
 
-    async fn update_track(
-        &self,
+    fn update_track(
+        &mut self,
         req: tonic::Request<peppermint_proto::UpdateTrackRequest>,
     ) -> Result<tonic::Response<peppermint_proto::UpdateTrackResponse>, tonic::Status> {
         let track_id = req.get_ref().track_id;
-        let mut tracks = self
-            .tracks
-            .lock()
-            .map_err(|e| tonic::Status::new(tonic::Code::Internal, e.to_string()))?;
-        let track = tracks.get_mut(&track_id).ok_or_else(|| {
+        let track = self.tracks.get_mut(&track_id).ok_or_else(|| {
             tonic::Status::new(
                 tonic::Code::NotFound,
                 format!("track {} not found", track_id),
@@ -183,11 +219,14 @@ impl peppermint_proto::peppermint_server::Peppermint for PeppermintServiceImpl {
                 peppermint_proto::track_property_update::TrackProperty::Undefined => (),
                 peppermint_proto::track_property_update::TrackProperty::Gain => {
                     track.gain = value;
-                    self.send_command(Command::UpdateTrack(
+                    let command = Command::UpdateTrack(
                         track_id,
                         peppermint_core::track::TrackProperty::Gain,
                         value,
-                    ))?;
+                    );
+                    self.commands.push(command).map_err(|_| {
+                        tonic::Status::new(tonic::Code::Internal, "failed to send command")
+                    })?;
                 }
             }
         }
@@ -196,8 +235,8 @@ impl peppermint_proto::peppermint_server::Peppermint for PeppermintServiceImpl {
         ))
     }
 
-    async fn instantiate_plugin(
-        &self,
+    fn instantiate_plugin(
+        &mut self,
         req: tonic::Request<peppermint_proto::InstantiatePluginRequest>,
     ) -> Result<tonic::Response<peppermint_proto::InstantiatePluginResponse>, tonic::Status> {
         let plugin = self.plugin_by_id(&req.get_ref().plugin_id).ok_or_else(|| {
@@ -214,18 +253,15 @@ impl peppermint_proto::peppermint_server::Peppermint for PeppermintServiceImpl {
                 )
             })?
         };
-        let mut tracks = self.tracks.lock().map_err(|e| {
-            tonic::Status::new(
-                tonic::Code::Internal,
-                format!("failed to acquire lock: {:?}", e),
-            )
-        })?;
-        let track = tracks.get_mut(&req.get_ref().track_id).ok_or_else(|| {
-            tonic::Status::new(
-                tonic::Code::NotFound,
-                format!("track {} not found", req.get_ref().track_id),
-            )
-        })?;
+        let track = self
+            .tracks
+            .get_mut(&req.get_ref().track_id)
+            .ok_or_else(|| {
+                tonic::Status::new(
+                    tonic::Code::NotFound,
+                    format!("track {} not found", req.get_ref().track_id),
+                )
+            })?;
         let track_core_id = track.id;
         let params: Vec<f32> = plugin
             .ports_with_type(livi::PortType::ControlInput)
@@ -238,11 +274,14 @@ impl peppermint_proto::peppermint_server::Peppermint for PeppermintServiceImpl {
                 plugin_id: req.get_ref().plugin_id.clone(),
                 params: params.clone(),
             });
-        self.send_command(Command::PushPluginInstance {
+        let command = Command::PushPluginInstance {
             track: track_core_id,
             instance,
             params,
-        })?;
+        };
+        self.commands
+            .push(command)
+            .map_err(|_| tonic::Status::new(tonic::Code::Internal, "failed to send command"))?;
         Ok(tonic::Response::new(
             peppermint_proto::InstantiatePluginResponse {
                 track_id: track_core_id,
