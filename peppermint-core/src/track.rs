@@ -9,6 +9,7 @@ pub enum TrackProperty {
 }
 
 struct InstanceContainer {
+    id: Id,
     instance: livi::Instance,
     params: Vec<f32>,
 }
@@ -37,8 +38,21 @@ impl Track {
         }
     }
 
-    pub fn push_instance(&mut self, instance: livi::Instance, params: Vec<f32>) {
-        self.instances.push(InstanceContainer { instance, params });
+    pub fn push_instance(&mut self, id: Id, instance: livi::Instance, params: Vec<f32>) {
+        self.instances.push(InstanceContainer {
+            id,
+            instance,
+            params,
+        });
+    }
+
+    pub fn delete_instance(&mut self, id: Id) -> Option<livi::Instance> {
+        let (idx, _) = self
+            .instances
+            .iter()
+            .enumerate()
+            .find(|(_, instance)| instance.id == id)?;
+        Some(self.instances.remove(idx).instance)
     }
 
     pub fn set_buffer_size(&mut self, buffer_size: usize) {

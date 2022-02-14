@@ -67,12 +67,18 @@ impl PeppermintCore {
                         }
                     }
                     Command::PushPluginInstance {
+                        id,
                         track,
                         instance,
                         params,
                     } => {
                         if let Some(track) = self.tracks.iter_mut().find(|t| t.id() == track) {
-                            track.push_instance(instance, params);
+                            track.push_instance(id, instance, params);
+                        }
+                    }
+                    Command::DeletePluginInstance { id } => {
+                        for track in self.tracks.iter_mut() {
+                            track.delete_instance(id);
                         }
                     }
                 };
