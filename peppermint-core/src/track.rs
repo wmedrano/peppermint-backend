@@ -47,11 +47,10 @@ impl Track {
     }
 
     pub fn delete_instance(&mut self, id: Id) -> Option<livi::Instance> {
-        let (idx, _) = self
+        let idx = self
             .instances
             .iter()
-            .enumerate()
-            .find(|(_, instance)| instance.id == id)?;
+            .position(|instance| instance.id == id)?;
         Some(self.instances.remove(idx).instance)
     }
 
