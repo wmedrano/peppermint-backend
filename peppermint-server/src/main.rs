@@ -3,6 +3,7 @@ use structopt::StructOpt;
 
 pub mod backends;
 pub mod grpc_service;
+pub mod manager;
 
 #[derive(Debug, StructOpt)]
 struct Options {

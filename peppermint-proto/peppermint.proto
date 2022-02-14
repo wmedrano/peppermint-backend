@@ -45,14 +45,21 @@ message Track {
     float gain = 3;
 
     repeated PluginInstance plugin_instances = 4;
+
+    reserved 5 to max; // Next IDs.
 }
 
 message PluginInstance {
+    // The id of the plugin instance.
+    uint64 id = 3;
+
     // The id of the plugin.
     string plugin_id = 1;
 
     // The parameters for the plugin.
     repeated float params = 2;
+
+    reserved 4 to max; // Next IDs.
 }
 
 service peppermint {
@@ -73,6 +80,8 @@ service peppermint {
 
     /// Instantiate a plugin.
     rpc InstantiatePlugin(InstantiatePluginRequest) returns (InstantiatePluginResponse);
+
+    rpc DeletePluginInstance(DeletePluginInstanceRequest) returns (DeletePluginInstanceResponse);
 }
 
 message GetPluginsRequest {}
@@ -80,12 +89,16 @@ message GetPluginsRequest {}
 message GetPluginsResponse {
     /// The list of plugins.
     repeated Plugin plugins = 1;
+
+    reserved 2 to max; // Next IDs.
 }
 
 message GetTracksRequest {}
 
 message GetTracksResponse {
     repeated Track tracks = 1;
+
+    reserved 2 to max; // Next IDs. 
 }
 
 message CreateTrackRequest {
@@ -98,16 +111,22 @@ message CreateTrackRequest {
 
     // The name of the track to create. If empty, a name will be generated.
     string name = 2;
+
+    reserved 3 to max; // Next IDs.
 }
 
 message CreateTrackResponse {
     // The newly created track.
     Track track = 1;
+
+    reserved 2 to max; // Next IDs.
 }
 
 message DeleteTrackRequest {
     // The track_id of the track to delete.
     uint64 track_id = 1;
+
+    reserved 2 to max; // Next IDs.
 }
 
 message DeleteTrackResponse {
@@ -127,6 +146,8 @@ message TrackPropertyUpdate {
 
     // The value of the property.
     float value = 2;
+
+    reserved 3 to max; // Next IDs.
 }
 
 message UpdateTrackRequest {
@@ -138,6 +159,8 @@ message UpdateTrackRequest {
 
     // The properties to update.
     repeated TrackPropertyUpdate updates = 3;
+
+    reserved 4 to max; // Next IDs.
 }
 
 message UpdateTrackResponse {}
@@ -148,12 +171,24 @@ message InstantiatePluginRequest {
 
     // The plugin_id of the plugin to instantiate.
     string plugin_id = 2;
+
+    reserved 3 to max; // Next IDs.
 }
 
 message InstantiatePluginResponse {
-    // The id of the track containing the plugin instance.
-    uint64 track_id = 1;
+    // The id of the plugin instance.
+    uint64 id = 2;
 
-    // The index of the plugin instance within the track.
-    uint64 plugin_instance_index = 2;
+    reserved 1; // Removed.
+
+    reserved 3 to max; // Next IDs.
 }
+
+message DeletePluginInstanceRequest {
+    // The id of the plugin instance to delete.
+    uint64 id = 1;
+
+    reserved 2 to max; // Next IDs.
+}
+
+message DeletePluginInstanceResponse {}
