@@ -6,7 +6,7 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-livi = "0.3"
+livi = "0.4"
 log = "0.4"
 lv2_raw = "0.2"
 ringbuf = "0.2"

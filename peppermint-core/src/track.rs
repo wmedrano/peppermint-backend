@@ -10,7 +10,7 @@ pub enum TrackProperty {
 
 struct InstanceContainer {
     id: Id,
-    instance: livi::Instance,
+    instance: Box<livi::Instance>,
     params: Vec<f32>,
 }
 
@@ -25,20 +25,20 @@ pub struct Track {
 }
 
 impl Track {
-    pub fn new(id: Id, buffer_size: usize, world: &livi::World) -> Track {
+    pub fn new(id: Id, buffer_size: usize, features: &livi::Features) -> Track {
         const LV2_ATOM_SEQUENCE_SIZE: usize = 1048576; // 1MiB
         Track {
             id,
             input: FixedChannels::new(buffer_size),
             output: FixedChannels::new(buffer_size),
-            atom_input: livi::event::LV2AtomSequence::new(LV2_ATOM_SEQUENCE_SIZE),
-            midi_urid: world.midi_urid(),
+            atom_input: livi::event::LV2AtomSequence::new(features, LV2_ATOM_SEQUENCE_SIZE),
+            midi_urid: features.midi_urid(),
             gain: 1.0,
             instances: Vec::with_capacity(64),
         }
     }
 
-    pub fn push_instance(&mut self, id: Id, instance: livi::Instance, params: Vec<f32>) {
+    pub fn push_instance(&mut self, id: Id, instance: Box<livi::Instance>, params: Vec<f32>) {
         self.instances.push(InstanceContainer {
             id,
             instance,
@@ -46,7 +46,7 @@ impl Track {
         });
     }
 
-    pub fn delete_instance(&mut self, id: Id) -> Option<livi::Instance> {
+    pub fn delete_instance(&mut self, id: Id) -> Option<Box<livi::Instance>> {
         let idx = self
             .instances
             .iter()

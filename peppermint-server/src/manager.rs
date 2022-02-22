@@ -1,10 +1,13 @@
-use std::collections::{HashMap, HashSet};
-
 use peppermint_core::command::Command;
 use ringbuf::Producer;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 pub struct PeppermintManager {
     lv2_world: livi::World,
+    lv2_features: Lv2Features,
     commands: Producer<Command>,
     ids: IdManager,
     tracks: HashMap<peppermint_core::Id, peppermint_proto::Track>,
@@ -13,12 +16,16 @@ pub struct PeppermintManager {
     buffer_size: usize,
 }
 
+struct Lv2Features(Arc<livi::Features>);
+unsafe impl Send for Lv2Features {}
+
 impl PeppermintManager {
     pub fn new(sample_rate: f64, buffer_size: usize, commands: Producer<Command>) -> Self {
-        let mut lv2_world = livi::World::new();
-        lv2_world.initialize_block_length(1, 8192).unwrap();
+        let lv2_world = livi::World::new();
+        let lv2_features = Lv2Features(lv2_world.build_features(livi::FeaturesBuilder::default()));
         PeppermintManager {
             lv2_world,
+            lv2_features,
             commands,
             ids: IdManager::new(),
             tracks: HashMap::new(),
@@ -81,7 +88,7 @@ impl PeppermintManager {
             })?,
         };
         let core_track =
-            peppermint_core::track::Track::new(track_id, self.buffer_size, &self.lv2_world);
+            peppermint_core::track::Track::new(track_id, self.buffer_size, &self.lv2_features.0);
         let track_name = if req.get_ref().name.is_empty() {
             format!("Track{}", track_id)
         } else {
@@ -177,14 +184,16 @@ impl PeppermintManager {
                 format!("plugin {} not found", req.get_ref().plugin_id),
             )
         })?;
-        let instance = unsafe {
-            plugin.instantiate(self.sample_rate as f64).map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Internal,
-                    format!("failed to instantiate plugin: {:?}", e),
-                )
-            })?
-        };
+        let instance = Box::new(unsafe {
+            plugin
+                .instantiate(self.lv2_features.0.clone(), self.sample_rate as f64)
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Internal,
+                        format!("failed to instantiate plugin: {:?}", e),
+                    )
+                })?
+        });
         let track = self
             .tracks
             .get_mut(&req.get_ref().track_id)
