@@ -214,13 +214,14 @@ impl PeppermintManager {
             .push(peppermint_proto::PluginInstance {
                 id: plugin_instance_id,
                 plugin_id: req.get_ref().plugin_id.clone(),
-                params: params.clone(),
+                params,
             });
+        self.plugin_instance_to_track
+            .insert(plugin_instance_id, track_core_id);
         let command = Command::PushPluginInstance {
             id: plugin_instance_id,
             track: track_core_id,
             instance,
-            params,
         };
         self.commands
             .push(command)
@@ -259,7 +260,10 @@ impl PeppermintManager {
             .ok_or_else(|| {
                 tonic::Status::new(
                     tonic::Code::NotFound,
-                    format!("plugin instance {} not found", req.get_ref().id),
+                    format!(
+                        "plugin instance {} not found within tracks",
+                        req.get_ref().id
+                    ),
                 )
             })?;
 

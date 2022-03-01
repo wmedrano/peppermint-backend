@@ -8,7 +8,7 @@ version = "0.1.0"
 [dependencies]
 env_logger = "0.9"
 jack = "0.9"
-livi = "0.4"
+livi = "0.5"
 log = "0.4"
 peppermint-core = {path = "../peppermint-core"}
 peppermint-proto = {path = "../peppermint-proto"}

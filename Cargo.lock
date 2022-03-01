@@ -468,15 +468,16 @@ dependencies = [
 
 [[package]]
 name = "livi"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62e3e26f69061456a8cc146030c0d8f00a3b3c7ec125875bdd2d09248fb5c80a"
+checksum = "8b9f90a4899b8d19d4f7aea7bb85d40bfa5999400d034d162f2086f5c2058e37"
 dependencies = [
  "lilv",
  "log",
  "lv2-sys",
  "lv2_raw",
  "ringbuf",
+ "vecmap",
 ]
 
 [[package]]
@@ -1210,6 +1211,12 @@ name = "vec_map"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
+
+[[package]]
+name = "vecmap"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33e6da144f897f2b9b339022f64ffd5ae17faefee4e8b1a5dd7fe599a4a5424b"
 
 [[package]]
 name = "version_check"

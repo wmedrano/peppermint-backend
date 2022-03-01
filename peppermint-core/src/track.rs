@@ -11,7 +11,6 @@ pub enum TrackProperty {
 struct InstanceContainer {
     id: Id,
     instance: Box<livi::Instance>,
-    params: Vec<f32>,
 }
 
 pub struct Track {
@@ -38,12 +37,8 @@ impl Track {
         }
     }
 
-    pub fn push_instance(&mut self, id: Id, instance: Box<livi::Instance>, params: Vec<f32>) {
-        self.instances.push(InstanceContainer {
-            id,
-            instance,
-            params,
-        });
+    pub fn push_instance(&mut self, id: Id, instance: Box<livi::Instance>) {
+        self.instances.push(InstanceContainer { id, instance });
     }
 
     pub fn delete_instance(&mut self, id: Id) -> Option<Box<livi::Instance>> {
@@ -89,8 +84,7 @@ impl Track {
         }
         for instance_container in self.instances.iter_mut() {
             std::mem::swap(&mut self.input, &mut self.output);
-            let ports = livi::EmptyPortConnections::new(samples)
-                .with_control_inputs(instance_container.params.iter())
+            let ports = livi::EmptyPortConnections::new()
                 .with_audio_inputs(
                     self.input.iter_channels().take(
                         instance_container
@@ -112,7 +106,7 @@ impl Track {
                             .port_counts_for_type(livi::PortType::AtomSequenceInput),
                     ),
                 );
-            if let Err(e) = unsafe { instance_container.instance.run(ports) } {
+            if let Err(e) = unsafe { instance_container.instance.run(samples, ports) } {
                 error!("Failed to run plugin: {:?}", e);
             };
         }

@@ -11,7 +11,6 @@ pub enum Command {
         id: Id,
         track: Id,
         instance: Box<livi::Instance>,
-        params: Vec<f32>,
     },
     DeletePluginInstance {
         id: Id,
