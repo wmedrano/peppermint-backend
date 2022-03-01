@@ -1,7 +1,7 @@
-use log::error;
-
 use crate::channels::FixedChannels;
 use crate::{Id, RawMidi};
+use livi::event::LV2AtomSequence;
+use log::error;
 
 #[derive(Debug)]
 pub enum TrackProperty {
@@ -17,7 +17,8 @@ pub struct Track {
     id: Id,
     input: FixedChannels<2>,
     output: FixedChannels<2>,
-    atom_input: livi::event::LV2AtomSequence,
+    atom_input: LV2AtomSequence,
+    atom_output: LV2AtomSequence,
     midi_urid: lv2_raw::LV2Urid,
     gain: f32,
     instances: Vec<InstanceContainer>,
@@ -30,7 +31,8 @@ impl Track {
             id,
             input: FixedChannels::new(buffer_size),
             output: FixedChannels::new(buffer_size),
-            atom_input: livi::event::LV2AtomSequence::new(features, LV2_ATOM_SEQUENCE_SIZE),
+            atom_input: LV2AtomSequence::new(features, LV2_ATOM_SEQUENCE_SIZE),
+            atom_output: LV2AtomSequence::new(features, LV2_ATOM_SEQUENCE_SIZE),
             midi_urid: features.midi_urid(),
             gain: 1.0,
             instances: Vec::with_capacity(64),
@@ -105,10 +107,29 @@ impl Track {
                             .instance
                             .port_counts_for_type(livi::PortType::AtomSequenceInput),
                     ),
+                )
+                .with_atom_sequence_outputs(
+                    std::iter::once(&mut self.atom_output)
+                        .map(|a| {
+                            a.clear_as_chunk();
+                            a
+                        })
+                        .take(
+                            instance_container
+                                .instance
+                                .port_counts_for_type(livi::PortType::AtomSequenceOutput),
+                        ),
                 );
             if let Err(e) = unsafe { instance_container.instance.run(samples, ports) } {
                 error!("Failed to run plugin: {:?}", e);
             };
+            if instance_container
+                .instance
+                .port_counts_for_type(livi::PortType::AtomSequenceOutput)
+                > 0
+            {
+                std::mem::swap(&mut self.atom_input, &mut self.atom_output);
+            }
         }
         &self.output
     }
