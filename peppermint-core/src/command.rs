@@ -10,8 +10,7 @@ pub enum Command {
     PushPluginInstance {
         id: Id,
         track: Id,
-        instance: livi::Instance,
-        params: Vec<f32>,
+        instance: Box<livi::Instance>,
     },
     DeletePluginInstance {
         id: Id,

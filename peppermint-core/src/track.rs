@@ -1,7 +1,7 @@
-use log::error;
-
 use crate::channels::FixedChannels;
 use crate::{Id, RawMidi};
+use livi::event::LV2AtomSequence;
+use log::error;
 
 #[derive(Debug)]
 pub enum TrackProperty {
@@ -10,43 +10,40 @@ pub enum TrackProperty {
 
 struct InstanceContainer {
     id: Id,
-    instance: livi::Instance,
-    params: Vec<f32>,
+    instance: Box<livi::Instance>,
 }
 
 pub struct Track {
     id: Id,
     input: FixedChannels<2>,
     output: FixedChannels<2>,
-    atom_input: livi::event::LV2AtomSequence,
+    atom_input: LV2AtomSequence,
+    atom_output: LV2AtomSequence,
     midi_urid: lv2_raw::LV2Urid,
     gain: f32,
     instances: Vec<InstanceContainer>,
 }
 
 impl Track {
-    pub fn new(id: Id, buffer_size: usize, world: &livi::World) -> Track {
+    pub fn new(id: Id, buffer_size: usize, features: &livi::Features) -> Track {
         const LV2_ATOM_SEQUENCE_SIZE: usize = 1048576; // 1MiB
         Track {
             id,
             input: FixedChannels::new(buffer_size),
             output: FixedChannels::new(buffer_size),
-            atom_input: livi::event::LV2AtomSequence::new(LV2_ATOM_SEQUENCE_SIZE),
-            midi_urid: world.midi_urid(),
+            atom_input: LV2AtomSequence::new(features, LV2_ATOM_SEQUENCE_SIZE),
+            atom_output: LV2AtomSequence::new(features, LV2_ATOM_SEQUENCE_SIZE),
+            midi_urid: features.midi_urid(),
             gain: 1.0,
             instances: Vec::with_capacity(64),
         }
     }
 
-    pub fn push_instance(&mut self, id: Id, instance: livi::Instance, params: Vec<f32>) {
-        self.instances.push(InstanceContainer {
-            id,
-            instance,
-            params,
-        });
+    pub fn push_instance(&mut self, id: Id, instance: Box<livi::Instance>) {
+        self.instances.push(InstanceContainer { id, instance });
     }
 
-    pub fn delete_instance(&mut self, id: Id) -> Option<livi::Instance> {
+    pub fn delete_instance(&mut self, id: Id) -> Option<Box<livi::Instance>> {
         let idx = self
             .instances
             .iter()
@@ -89,8 +86,7 @@ impl Track {
         }
         for instance_container in self.instances.iter_mut() {
             std::mem::swap(&mut self.input, &mut self.output);
-            let ports = livi::EmptyPortConnections::new(samples)
-                .with_control_inputs(instance_container.params.iter())
+            let ports = livi::EmptyPortConnections::new()
                 .with_audio_inputs(
                     self.input.iter_channels().take(
                         instance_container
@@ -111,10 +107,29 @@ impl Track {
                             .instance
                             .port_counts_for_type(livi::PortType::AtomSequenceInput),
                     ),
+                )
+                .with_atom_sequence_outputs(
+                    std::iter::once(&mut self.atom_output)
+                        .map(|a| {
+                            a.clear_as_chunk();
+                            a
+                        })
+                        .take(
+                            instance_container
+                                .instance
+                                .port_counts_for_type(livi::PortType::AtomSequenceOutput),
+                        ),
                 );
-            if let Err(e) = unsafe { instance_container.instance.run(ports) } {
+            if let Err(e) = unsafe { instance_container.instance.run(samples, ports) } {
                 error!("Failed to run plugin: {:?}", e);
             };
+            if instance_container
+                .instance
+                .port_counts_for_type(livi::PortType::AtomSequenceOutput)
+                > 0
+            {
+                std::mem::swap(&mut self.atom_input, &mut self.atom_output);
+            }
         }
         &self.output
     }
